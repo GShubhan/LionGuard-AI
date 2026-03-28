@@ -66,8 +66,8 @@ const checkDomain = new Tool({
 
     // Simulate domain age — suspicious domains tend to be newer
     const domainAgeDays = hasSuspiciousPattern
-      ? Math.floor(Math.random() * 90) + 1   // 1–90 days (new)
-      : Math.floor(Math.random() * 1000) + 90; // 90 days – 3 years
+      ? Math.floor(Math.random() * 90) + 1
+      : Math.floor(Math.random() * 2000) + 365; // minimum 1 year for non-suspicious domains
 
     const recentlyCreated = domainAgeDays < 180;
     const suspicious = hasSuspiciousPattern || recentlyCreated;

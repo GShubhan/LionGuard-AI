@@ -1,64 +1,87 @@
 const { Tool } = require('../agent/tinyfish');
 
-/**
- * checkCompanyRegistry - Simulates ACRA (Accounting and Corporate Regulatory Authority)
- * company registry lookup to verify if a business is legitimately registered.
- */
+// Well-known global companies — these are legit regardless of ACRA
+const GLOBAL_KNOWN_BRANDS = [
+  'google', 'youtube', 'alphabet', 'microsoft', 'apple', 'amazon', 'meta',
+  'facebook', 'instagram', 'whatsapp', 'netflix', 'spotify', 'uber', 'airbnb',
+  'twitter', 'x corp', 'linkedin', 'openai', 'anthropic', 'mistral', 'deepmind',
+  'nvidia', 'intel', 'amd', 'samsung', 'sony', 'lg', 'huawei', 'xiaomi',
+  'shopify', 'stripe', 'paypal', 'visa', 'mastercard', 'amex',
+  'tinyfish', 'vercel', 'netlify', 'github', 'gitlab', 'atlassian',
+  'marvel', 'disney', 'netflix', 'warner', 'universal',
+  'mckinsey', 'deloitte', 'pwc', 'kpmg', 'ernst', 'accenture',
+  'tencent', 'alibaba', 'bytedance', 'baidu', 'grab', 'sea limited', 'shopee',
+];
 
-// Mock registry of known companies for demonstration
-const MOCK_REGISTRY = {
-  'dbs': { exists: true, numberOfEmployees: 12000, notes: 'Established Singapore bank. DBS Bank Ltd, UEN 196800306E' },
-  'ocbc': { exists: true, numberOfEmployees: 25000, notes: 'Legitimate Singapore bank. OCBC Bank, UEN 193200032W' },
-  'singtel': { exists: true, numberOfEmployees: 23000, notes: 'Registered telecom company. Singapore Telecommunications Limited' },
-  'grab': { exists: true, numberOfEmployees: 7000, notes: 'Registered tech company. Grab Holdings Inc.' },
-  'shopee': { exists: true, numberOfEmployees: 5000, notes: 'Registered e-commerce company. Sea Limited' },
-  'amazon': { exists: true, numberOfEmployees: 1000000, notes: 'Global tech/e-commerce. Amazon.com Inc.' },
-  'marvel': { exists: true, numberOfEmployees: 5000, notes: 'Global entertainment. Marvel Entertainment LLC.' },
-  'anthropic': { exists: true, numberOfEmployees: 500, notes: 'Global AI research. Anthropic PBC.' },
-  'google': { exists: true, numberOfEmployees: 150000, notes: 'Global tech company. Alphabet Inc.' },
-  'unknown': { exists: false, numberOfEmployees: 0, notes: 'Not found in ACRA registry' },
+// Singapore-registered companies
+const SINGAPORE_REGISTRY = {
+  'dbs': { exists: true, notes: 'DBS Bank Ltd — established Singapore bank, UEN 196800306E' },
+  'ocbc': { exists: true, notes: 'OCBC Bank — established Singapore bank, UEN 193200032W' },
+  'uob': { exists: true, notes: 'United Overseas Bank — established Singapore bank' },
+  'posb': { exists: true, notes: 'POSB — part of DBS Group, established Singapore bank' },
+  'singtel': { exists: true, notes: 'Singapore Telecommunications Limited — registered telecom' },
+  'starhub': { exists: true, notes: 'StarHub Ltd — registered Singapore telecom' },
+  'grab': { exists: true, notes: 'Grab Holdings — registered tech company' },
+  'shopee': { exists: true, notes: 'Sea Limited / Shopee — registered e-commerce' },
+  'carousell': { exists: true, notes: 'Carousell — registered Singapore marketplace' },
+  'foodpanda': { exists: true, notes: 'Foodpanda — registered food delivery' },
+  'nus': { exists: true, notes: 'National University of Singapore — public university' },
+  'ntu': { exists: true, notes: 'Nanyang Technological University — public university' },
+  'smu': { exists: true, notes: 'Singapore Management University — private university' },
 };
+
+// Financial-sounding words that suggest a Singapore-local financial claim
+const LOCAL_FINANCE_TERMS = [
+  'capital', 'invest', 'wealth', 'profit', 'earn', 'fund', 'asset',
+  'trading', 'returns', 'portfolio', 'yield', 'crypto', 'forex',
+];
 
 const checkCompanyRegistry = new Tool({
   name: 'checkCompanyRegistry',
-  description: 'Verify if a company exists in the ACRA business registry (Singapore).',
+  description: 'Check if a company is a known legitimate brand or registered Singapore business.',
   execute: async ({ companyName }) => {
-    if (!companyName || companyName === 'Unknown') {
+    if (!companyName || companyName === 'Unknown' || companyName.trim().length < 2) {
       return {
         exists: false,
-        numberOfEmployees: 0,
-        notes: 'No company name provided — cannot verify registration.',
+        notes: 'No company name detected — registry check skipped.',
       };
     }
 
     const key = companyName.toLowerCase().trim();
 
-    // Check exact or partial match in mock registry
-    const matched = Object.keys(MOCK_REGISTRY).find(
+    // 1. Check Singapore registry first (exact/partial)
+    const sgMatch = Object.keys(SINGAPORE_REGISTRY).find(
       (k) => key.includes(k) || k.includes(key)
     );
-
-    if (matched) {
-      return MOCK_REGISTRY[matched];
+    if (sgMatch) {
+      return { exists: true, ...SINGAPORE_REGISTRY[sgMatch] };
     }
 
-    // Simulate realistic random outcomes for unknown companies
-    const suspiciousTerms = ['capital', 'invest', 'wealth', 'profit', 'earn', 'crypto', 'fund', 'global'];
-    const looksSuspicious = suspiciousTerms.some((t) => key.includes(t));
-
-    if (looksSuspicious) {
+    // 2. Check global known brands — these are legit, just not Singapore-registered
+    const globalMatch = GLOBAL_KNOWN_BRANDS.find(
+      (brand) => key.includes(brand) || brand.includes(key)
+    );
+    if (globalMatch) {
       return {
-        exists: false,
-        numberOfEmployees: 0,
-        notes: `"${companyName}" not found in ACRA registry. Financial-sounding name with no registration record.`,
+        exists: true,
+        notes: `"${companyName}" is a well-known global brand. Not Singapore ACRA-registered but this is expected for international companies.`,
       };
     }
 
-    // Generic unknown — could be real or not
+    // 3. Unknown company — check if it's making local financial claims
+    const hasLocalFinanceClaim = LOCAL_FINANCE_TERMS.some((t) => key.includes(t));
+
+    if (hasLocalFinanceClaim) {
+      return {
+        exists: false,
+        notes: `"${companyName}" not found in ACRA registry. Financial or investment company with no registration record is a significant red flag in Singapore.`,
+      };
+    }
+
+    // 4. Generic unknown — neutral signal, let OpenAI decide
     return {
       exists: false,
-      numberOfEmployees: 0,
-      notes: `"${companyName}" not found in ACRA registry. Could be unregistered or operating under a different name.`,
+      notes: `"${companyName}" not found in known registry. This is a weak signal — many legitimate small businesses or international companies won't appear here.`,
     };
   },
 });
