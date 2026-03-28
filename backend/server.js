@@ -42,6 +42,7 @@ app.get('/health', (req, res) => {
  * }
  */
 app.post('/analyze', async (req, res) => {
+  console.log("=> /analyze hit with input:", req.body.input);
   const { input } = req.body;
 
   if (!input || !input.trim()) {
@@ -59,23 +60,25 @@ app.post('/analyze', async (req, res) => {
     const workflow = createScamWorkflow(agent);
 
     // Run the Tinyfish workflow
+    console.log("Running workflow...");
     const context = await workflow.run({ userInput: input.trim() });
-
+    console.log("Workflow finished.");
     const { scraped, companyRegistry, domainData, patternResult } = context;
 
     // Build the evidence summary for OpenAI
     const evidenceSummary = {
-      inputType: scraped.inputType,
-      companyName: scraped.companyName,
-      offerType: scraped.offerType,
-      keyClaims: scraped.keyClaims,
-      extractedContent: scraped.rawContent.slice(0, 1500), // truncate for token efficiency
-      companyRegistry,
-      domainData,
-      scamPatterns: patternResult.matchedPatterns,
+      inputType: scraped?.inputType || 'unknown',
+      companyName: scraped?.companyName || 'Unknown',
+      offerType: scraped?.offerType || 'unknown',
+      keyClaims: scraped?.keyClaims || [],
+      extractedContent: scraped?.rawContent ? scraped.rawContent.slice(0, 1500) : '',
+      companyRegistry: companyRegistry || { exists: false, notes: 'Not checked' },
+      domainData: domainData || { suspicious: false, domainAgeDays: 0 },
+      scamPatterns: patternResult?.matchedPatterns || [],
     };
 
     // Call OpenAI for final reasoning
+    console.log("Calling OpenAI...");
     const completion = await getOpenAI().chat.completions.create({
       model: 'gpt-4o-mini',
       temperature: 0.2,
@@ -85,6 +88,7 @@ app.post('/analyze', async (req, res) => {
           role: 'system',
           content: `You are a fraud detection analyst specializing in Singapore scams.
 You analyze signals from multiple sources and determine whether something is a scam.
+CRITICAL RULE: If a company is a well-known global brand (e.g., Anthropic, Amazon, Marvel, Apple) or clearly a foreign entity, DO NOT penalize it for being missing from the Singapore ACRA registry. Only penalize ACRA absence if it explicitly claims to be a local Singapore business.
 You must provide clear, evidence-based reasoning.
 Always respond with a valid JSON object matching this exact schema:
 {
@@ -138,15 +142,20 @@ Based on all the above, provide your verdict, confidence score, red flags, evide
       };
     }
 
+    console.log("Returning JSON success.");
     return res.json({ ...analysis, steps });
-    } catch (err) {
+  } catch (err) {
+    console.log("Caught error:", err.message);
+    require('fs').appendFileSync('backend-crash.log', 'Caught error: ' + String(err.stack) + '\n');
     // In demo / sandbox mode the OpenAI call fails due to no API key or no
     // network access — this is expected and we silently fall back.
     const isDemoFallback =
       err.code === 'invalid_api_key' ||
       err.code === 'insufficient_quota' ||
-      err.code === 'ENOTFOUND' ||
+      err.code === 'rate_limit_exceeded' ||
       err.status === 401 ||
+      err.status === 429 ||
+      err.code === 'ENOTFOUND' ||
       (err.cause && err.cause.code === 'ENOTFOUND') ||
       !process.env.OPENAI_API_KEY ||
       process.env.OPENAI_API_KEY === 'your_openai_api_key_here' ||
@@ -157,8 +166,15 @@ Based on all the above, provide your verdict, confidence score, red flags, evide
     }
 
     console.error('Analysis error:', err);
+    require('fs').appendFileSync('backend-crash.log', 'Analysis error: ' + String(err.stack) + '\n');
     return res.status(500).json({ error: err.message || 'Internal server error' });
   }
+});
+
+// App-level global error handler to catch sneaky unhandled errors
+app.use((err, req, res, next) => {
+  require('fs').appendFileSync('backend-crash.log', 'GLOBAL ERROR: ' + String(err.stack) + '\n');
+  res.status(500).json({ error: 'Global unhandled error' });
 });
 
 /**

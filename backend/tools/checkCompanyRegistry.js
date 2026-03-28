@@ -12,6 +12,10 @@ const MOCK_REGISTRY = {
   'singtel': { exists: true, numberOfEmployees: 23000, notes: 'Registered telecom company. Singapore Telecommunications Limited' },
   'grab': { exists: true, numberOfEmployees: 7000, notes: 'Registered tech company. Grab Holdings Inc.' },
   'shopee': { exists: true, numberOfEmployees: 5000, notes: 'Registered e-commerce company. Sea Limited' },
+  'amazon': { exists: true, numberOfEmployees: 1000000, notes: 'Global tech/e-commerce. Amazon.com Inc.' },
+  'marvel': { exists: true, numberOfEmployees: 5000, notes: 'Global entertainment. Marvel Entertainment LLC.' },
+  'anthropic': { exists: true, numberOfEmployees: 500, notes: 'Global AI research. Anthropic PBC.' },
+  'google': { exists: true, numberOfEmployees: 150000, notes: 'Global tech company. Alphabet Inc.' },
   'unknown': { exists: false, numberOfEmployees: 0, notes: 'Not found in ACRA registry' },
 };
 
